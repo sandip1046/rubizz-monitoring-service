@@ -1,0 +1,244 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Service Health Status Enum
+enum ServiceStatus {
+  HEALTHY
+  UNHEALTHY
+  DEGRADED
+  UNKNOWN
+  MAINTENANCE
+}
+
+// Alert Severity Levels
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// Alert Status
+enum AlertStatus {
+  ACTIVE
+  RESOLVED
+  ACKNOWLEDGED
+  SUPPRESSED
+}
+
+// Metric Types
+enum MetricType {
+  COUNTER
+  GAUGE
+  HISTOGRAM
+  SUMMARY
+}
+
+// Service Health Checks
+model ServiceHealth {
+  id          String   @id @default(cuid())
+  serviceName String
+  serviceUrl  String
+  status      ServiceStatus
+  responseTime Int?    // in milliseconds
+  lastChecked DateTime @default(now())
+  errorMessage String?
+  metadata    Json?    // Additional service-specific data
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("service_health")
+  @@index([serviceName])
+  @@index([status])
+  @@index([lastChecked])
+}
+
+// System Metrics
+model SystemMetric {
+  id          String     @id @default(cuid())
+  serviceName String
+  metricName  String
+  metricType  MetricType
+  value       Float
+  labels      Json?      // Key-value pairs for metric labels
+  timestamp   DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+
+  @@map("system_metrics")
+  @@index([serviceName])
+  @@index([metricName])
+  @@index([timestamp])
+  @@index([serviceName, metricName, timestamp])
+}
+
+// Performance Metrics
+model PerformanceMetric {
+  id            String   @id @default(cuid())
+  serviceName   String
+  endpoint      String
+  method        String
+  responseTime  Int      // in milliseconds
+  statusCode    Int
+  requestSize   Int?     // in bytes
+  responseSize  Int?     // in bytes
+  userAgent     String?
+  ipAddress     String?
+  timestamp     DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@map("performance_metrics")
+  @@index([serviceName])
+  @@index([endpoint])
+  @@index([timestamp])
+  @@index([serviceName, endpoint, timestamp])
+}
+
+// Resource Usage Metrics
+model ResourceMetric {
+  id          String   @id @default(cuid())
+  serviceName String
+  cpuUsage    Float?   // CPU usage percentage
+  memoryUsage Float?   // Memory usage percentage
+  diskUsage   Float?   // Disk usage percentage
+  networkIn   Float?   // Network input in bytes
+  networkOut  Float?   // Network output in bytes
+  timestamp   DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@map("resource_metrics")
+  @@index([serviceName])
+  @@index([timestamp])
+  @@index([serviceName, timestamp])
+}
+
+// Alerts
+model Alert {
+  id          String        @id @default(cuid())
+  serviceName String
+  alertType   String        // e.g., "high_cpu", "memory_usage", "response_time"
+  severity    AlertSeverity
+  status      AlertStatus   @default(ACTIVE)
+  title       String
+  description String
+  value       Float?        // Current value that triggered the alert
+  threshold   Float?        // Threshold value
+  labels      Json?         // Additional alert metadata
+  resolvedAt  DateTime?
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("alerts")
+  @@index([serviceName])
+  @@index([severity])
+  @@index([status])
+  @@index([createdAt])
+  @@index([serviceName, status])
+}
+
+// Alert Rules
+model AlertRule {
+  id          String        @id @default(cuid())
+  name        String
+  description String
+  serviceName String
+  metricName  String
+  condition   String        // e.g., ">", "<", ">=", "<=", "==", "!="
+  threshold   Float
+  severity    AlertSeverity
+  enabled     Boolean       @default(true)
+  labels      Json?         // Additional rule metadata
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("alert_rules")
+  @@index([serviceName])
+  @@index([enabled])
+  @@unique([serviceName, metricName, condition, threshold])
+}
+
+// Service Discovery
+model ServiceRegistry {
+  id          String   @id @default(cuid())
+  serviceName String
+  serviceUrl  String
+  version     String
+  environment String   @default("production")
+  region      String?
+  zone        String?
+  tags        String[] // Array of service tags
+  metadata    Json?    // Additional service metadata
+  lastSeen    DateTime @default(now())
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("service_registry")
+  @@index([serviceName])
+  @@index([environment])
+  @@index([isActive])
+  @@index([lastSeen])
+  @@unique([serviceName, serviceUrl])
+}
+
+// Monitoring Dashboards
+model Dashboard {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  layout      Json     // Dashboard layout configuration
+  widgets     Json     // Array of widget configurations
+  isPublic    Boolean  @default(false)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("dashboards")
+  @@index([createdBy])
+  @@index([isPublic])
+}
+
+// Monitoring Reports
+model MonitoringReport {
+  id          String   @id @default(cuid())
+  reportType  String   // e.g., "daily", "weekly", "monthly"
+  serviceName String?
+  title       String
+  content     Json     // Report content and data
+  generatedAt DateTime @default(now())
+  generatedBy String?
+  createdAt   DateTime @default(now())
+
+  @@map("monitoring_reports")
+  @@index([reportType])
+  @@index([serviceName])
+  @@index([generatedAt])
+}
+
+// Audit Log for Monitoring Actions
+model MonitoringAuditLog {
+  id          String   @id @default(cuid())
+  action      String   // e.g., "alert_created", "rule_updated", "dashboard_created"
+  serviceName String?
+  userId      String?
+  details     Json?    // Additional action details
+  ipAddress   String?
+  userAgent   String?
+  timestamp   DateTime @default(now())
+
+  @@map("monitoring_audit_logs")
+  @@index([action])
+  @@index([serviceName])
+  @@index([userId])
+  @@index([timestamp])
+}
