@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { MetricsCollectionService } from '@/services/MetricsCollectionService';
-import { logger } from '@/utils/logger';
+import logger from '@/utils/logger';
 import { config } from '@/config/config';
 
 export class RequestMonitoringMiddleware {
@@ -48,12 +48,18 @@ export class RequestMonitoringMiddleware {
         return originalJson.call(this, data);
       };
 
-      res.end = function(data?: any) {
+      res.end = function(data?: any, encoding?: any, cb?: any) {
         if (data) {
           responseSize = Buffer.byteLength(data || '', 'utf8');
         }
         statusCode = res.statusCode;
-        return originalEnd.call(this, data);
+        if (typeof cb === 'function') {
+          return originalEnd.call(this, data, encoding, cb);
+        } else if (encoding && typeof encoding !== 'function') {
+          return originalEnd.call(this, data, encoding);
+        } else {
+          return originalEnd.call(this, data, encoding);
+        }
       };
 
       // Handle response finish event

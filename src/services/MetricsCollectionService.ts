@@ -3,7 +3,7 @@ import { SystemMetricsModel } from '@/models/SystemMetricsModel';
 import { PerformanceMetricsModel } from '@/models/PerformanceMetricsModel';
 import { SystemMetric, PerformanceMetric, MetricType } from '@/types';
 import { config } from '@/config/config';
-import { logger } from '@/utils/logger';
+import logger from '@/utils/logger';
 
 export class MetricsCollectionService {
   private static instance: MetricsCollectionService;
@@ -129,21 +129,21 @@ export class MetricsCollectionService {
           serviceName,
           metricName: 'cpu.load.1m',
           metricType: MetricType.GAUGE,
-          value: loadAverage[0],
+          value: loadAverage[0] || 0,
           timestamp,
         },
         {
           serviceName,
           metricName: 'cpu.load.5m',
           metricType: MetricType.GAUGE,
-          value: loadAverage[1],
+          value: loadAverage[1] || 0,
           timestamp,
         },
         {
           serviceName,
           metricName: 'cpu.load.15m',
           metricType: MetricType.GAUGE,
-          value: loadAverage[2],
+          value: loadAverage[2] || 0,
           timestamp,
         },
         {
@@ -454,8 +454,7 @@ export class MetricsCollectionService {
       return await PerformanceMetricsModel.getPerformanceSummary(
         serviceName,
         startTime,
-        endTime,
-        endpoint
+        endTime
       );
     } catch (error) {
       logger.error('Error getting performance summary', {

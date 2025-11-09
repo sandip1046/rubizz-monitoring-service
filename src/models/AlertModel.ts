@@ -1,6 +1,6 @@
-import { prisma } from '@/database/connection';
-import { Alert, AlertSeverity, AlertStatus } from '@/types';
-import { logger } from '@/utils/logger';
+import { AlertModel as MongooseAlertModel, AlertSeverity, AlertStatus } from './mongoose/Alert';
+import { Alert, AlertSeverity as AlertSeverityType, AlertStatus as AlertStatusType } from '@/types';
+import logger from '@/utils/logger';
 
 export class AlertModel {
   /**
@@ -8,30 +8,28 @@ export class AlertModel {
    */
   static async create(data: Omit<Alert, 'id'>): Promise<Alert> {
     try {
-      const alert = await prisma.alert.create({
-        data: {
-          serviceName: data.serviceName,
-          alertType: data.alertType,
-          severity: data.severity,
-          status: data.status,
-          title: data.title,
-          description: data.description,
-          value: data.value,
-          threshold: data.threshold,
-          labels: data.labels,
-          acknowledgedBy: data.acknowledgedBy,
-        },
+      const alert = await MongooseAlertModel.create({
+        serviceName: data.serviceName,
+        alertType: data.alertType,
+        severity: data.severity,
+        status: data.status || AlertStatus.ACTIVE,
+        title: data.title,
+        description: data.description,
+        value: data.value,
+        threshold: data.threshold,
+        labels: data.labels,
+        acknowledgedBy: data.acknowledgedBy,
       });
 
       logger.warn('Alert created', {
-        alertId: alert.id,
+        alertId: (alert._id as any)?.toString() || alert.id,
         serviceName: data.serviceName,
         alertType: data.alertType,
         severity: data.severity,
         status: data.status,
       });
 
-      return alert as Alert;
+      return this.mapToAlert(alert);
     } catch (error) {
       logger.error('Error creating alert', {
         serviceName: data.serviceName,
@@ -47,11 +45,8 @@ export class AlertModel {
    */
   static async findById(id: string): Promise<Alert | null> {
     try {
-      const alert = await prisma.alert.findUnique({
-        where: { id },
-      });
-
-      return alert as Alert | null;
+      const alert = await MongooseAlertModel.findById(id);
+      return alert ? this.mapToAlert(alert) : null;
     } catch (error) {
       logger.error('Error finding alert by ID', {
         id,
@@ -66,24 +61,23 @@ export class AlertModel {
    */
   static async findByService(
     serviceName: string,
-    status?: AlertStatus,
+    status?: AlertStatusType,
     limit: number = 100,
     offset: number = 0
   ): Promise<Alert[]> {
     try {
-      const whereClause: any = { serviceName };
+      const query: any = { serviceName };
       if (status) {
-        whereClause.status = status;
+        query.status = status;
       }
 
-      const alerts = await prisma.alert.findMany({
-        where: whereClause,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
-      });
+      const alerts = await MongooseAlertModel.find(query)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .skip(offset)
+        .lean();
 
-      return alerts as Alert[];
+      return alerts.map((alert: any) => this.mapToAlert(alert));
     } catch (error) {
       logger.error('Error finding alerts by service', {
         serviceName,
@@ -98,25 +92,24 @@ export class AlertModel {
    * Get alerts by severity
    */
   static async findBySeverity(
-    severity: AlertSeverity,
-    status?: AlertStatus,
+    severity: AlertSeverityType,
+    status?: AlertStatusType,
     limit: number = 100,
     offset: number = 0
   ): Promise<Alert[]> {
     try {
-      const whereClause: any = { severity };
+      const query: any = { severity };
       if (status) {
-        whereClause.status = status;
+        query.status = status;
       }
 
-      const alerts = await prisma.alert.findMany({
-        where: whereClause,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
-      });
+      const alerts = await MongooseAlertModel.find(query)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .skip(offset)
+        .lean();
 
-      return alerts as Alert[];
+      return alerts.map((alert: any) => this.mapToAlert(alert));
     } catch (error) {
       logger.error('Error finding alerts by severity', {
         severity,
@@ -132,17 +125,13 @@ export class AlertModel {
    */
   static async findActive(limit: number = 100, offset: number = 0): Promise<Alert[]> {
     try {
-      const alerts = await prisma.alert.findMany({
-        where: { status: AlertStatus.ACTIVE },
-        orderBy: [
-          { severity: 'desc' },
-          { createdAt: 'desc' },
-        ],
-        take: limit,
-        skip: offset,
-      });
+      const alerts = await MongooseAlertModel.find({ status: AlertStatus.ACTIVE })
+        .sort({ severity: -1, createdAt: -1 })
+        .limit(limit)
+        .skip(offset)
+        .lean();
 
-      return alerts as Alert[];
+      return alerts.map((alert: any) => this.mapToAlert(alert));
     } catch (error) {
       logger.error('Error finding active alerts', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -156,16 +145,15 @@ export class AlertModel {
    */
   static async findCritical(limit: number = 50): Promise<Alert[]> {
     try {
-      const alerts = await prisma.alert.findMany({
-        where: {
-          severity: AlertSeverity.CRITICAL,
-          status: AlertStatus.ACTIVE,
-        },
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-      });
+      const alerts = await MongooseAlertModel.find({
+        severity: AlertSeverity.CRITICAL,
+        status: AlertStatus.ACTIVE,
+      })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
 
-      return alerts as Alert[];
+      return alerts.map((alert: any) => this.mapToAlert(alert));
     } catch (error) {
       logger.error('Error finding critical alerts', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -181,39 +169,30 @@ export class AlertModel {
     startTime: Date,
     endTime: Date,
     serviceName?: string,
-    severity?: AlertSeverity,
-    status?: AlertStatus,
+    severity?: AlertSeverityType,
+    status?: AlertStatusType,
     limit: number = 1000,
     offset: number = 0
   ): Promise<Alert[]> {
     try {
-      const whereClause: any = {
+      const query: any = {
         createdAt: {
-          gte: startTime,
-          lte: endTime,
+          $gte: startTime,
+          $lte: endTime,
         },
       };
 
-      if (serviceName) {
-        whereClause.serviceName = serviceName;
-      }
+      if (serviceName) query.serviceName = serviceName;
+      if (severity) query.severity = severity;
+      if (status) query.status = status;
 
-      if (severity) {
-        whereClause.severity = severity;
-      }
+      const alerts = await MongooseAlertModel.find(query)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .skip(offset)
+        .lean();
 
-      if (status) {
-        whereClause.status = status;
-      }
-
-      const alerts = await prisma.alert.findMany({
-        where: whereClause,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
-      });
-
-      return alerts as Alert[];
+      return alerts.map((alert: any) => this.mapToAlert(alert));
     } catch (error) {
       logger.error('Error finding alerts by time range', {
         startTime,
@@ -233,19 +212,24 @@ export class AlertModel {
   static async update(id: string, data: Partial<Alert>): Promise<Alert> {
     try {
       const updateData: any = { ...data };
-      
+
       if (data.status === AlertStatus.RESOLVED) {
         updateData.resolvedAt = new Date();
       }
-      
+
       if (data.status === AlertStatus.ACKNOWLEDGED) {
         updateData.acknowledgedAt = new Date();
       }
 
-      const alert = await prisma.alert.update({
-        where: { id },
-        data: updateData,
-      });
+      const alert = await MongooseAlertModel.findByIdAndUpdate(
+        id,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+
+      if (!alert) {
+        throw new Error('Alert not found');
+      }
 
       logger.debug('Alert updated', {
         alertId: id,
@@ -253,7 +237,7 @@ export class AlertModel {
         severity: data.severity,
       });
 
-      return alert as Alert;
+      return this.mapToAlert(alert);
     } catch (error) {
       logger.error('Error updating alert', {
         id,
@@ -268,14 +252,21 @@ export class AlertModel {
    */
   static async acknowledge(id: string, acknowledgedBy: string): Promise<Alert> {
     try {
-      const alert = await prisma.alert.update({
-        where: { id },
-        data: {
-          status: AlertStatus.ACKNOWLEDGED,
-          acknowledgedAt: new Date(),
-          acknowledgedBy,
+      const alert = await MongooseAlertModel.findByIdAndUpdate(
+        id,
+        {
+          $set: {
+            status: AlertStatus.ACKNOWLEDGED,
+            acknowledgedAt: new Date(),
+            acknowledgedBy,
+          },
         },
-      });
+        { new: true }
+      );
+
+      if (!alert) {
+        throw new Error('Alert not found');
+      }
 
       logger.info('Alert acknowledged', {
         alertId: id,
@@ -283,7 +274,7 @@ export class AlertModel {
         serviceName: alert.serviceName,
       });
 
-      return alert as Alert;
+      return this.mapToAlert(alert);
     } catch (error) {
       logger.error('Error acknowledging alert', {
         id,
@@ -299,13 +290,20 @@ export class AlertModel {
    */
   static async resolve(id: string, resolvedBy?: string): Promise<Alert> {
     try {
-      const alert = await prisma.alert.update({
-        where: { id },
-        data: {
-          status: AlertStatus.RESOLVED,
-          resolvedAt: new Date(),
+      const alert = await MongooseAlertModel.findByIdAndUpdate(
+        id,
+        {
+          $set: {
+            status: AlertStatus.RESOLVED,
+            resolvedAt: new Date(),
+          },
         },
-      });
+        { new: true }
+      );
+
+      if (!alert) {
+        throw new Error('Alert not found');
+      }
 
       logger.info('Alert resolved', {
         alertId: id,
@@ -313,7 +311,7 @@ export class AlertModel {
         serviceName: alert.serviceName,
       });
 
-      return alert as Alert;
+      return this.mapToAlert(alert);
     } catch (error) {
       logger.error('Error resolving alert', {
         id,
@@ -329,10 +327,7 @@ export class AlertModel {
    */
   static async delete(id: string): Promise<void> {
     try {
-      await prisma.alert.delete({
-        where: { id },
-      });
-
+      await MongooseAlertModel.findByIdAndDelete(id);
       logger.debug('Alert deleted', { id });
     } catch (error) {
       logger.error('Error deleting alert', {
@@ -357,9 +352,9 @@ export class AlertModel {
     low: number;
   }> {
     try {
-      const whereClause: any = {};
+      const query: any = {};
       if (serviceName) {
-        whereClause.serviceName = serviceName;
+        query.serviceName = serviceName;
       }
 
       const [
@@ -372,14 +367,14 @@ export class AlertModel {
         medium,
         low,
       ] = await Promise.all([
-        prisma.alert.count({ where: whereClause }),
-        prisma.alert.count({ where: { ...whereClause, status: AlertStatus.ACTIVE } }),
-        prisma.alert.count({ where: { ...whereClause, status: AlertStatus.RESOLVED } }),
-        prisma.alert.count({ where: { ...whereClause, status: AlertStatus.ACKNOWLEDGED } }),
-        prisma.alert.count({ where: { ...whereClause, severity: AlertSeverity.CRITICAL } }),
-        prisma.alert.count({ where: { ...whereClause, severity: AlertSeverity.HIGH } }),
-        prisma.alert.count({ where: { ...whereClause, severity: AlertSeverity.MEDIUM } }),
-        prisma.alert.count({ where: { ...whereClause, severity: AlertSeverity.LOW } }),
+        MongooseAlertModel.countDocuments(query),
+        MongooseAlertModel.countDocuments({ ...query, status: AlertStatus.ACTIVE }),
+        MongooseAlertModel.countDocuments({ ...query, status: AlertStatus.RESOLVED }),
+        MongooseAlertModel.countDocuments({ ...query, status: AlertStatus.ACKNOWLEDGED }),
+        MongooseAlertModel.countDocuments({ ...query, severity: AlertSeverity.CRITICAL }),
+        MongooseAlertModel.countDocuments({ ...query, severity: AlertSeverity.HIGH }),
+        MongooseAlertModel.countDocuments({ ...query, severity: AlertSeverity.MEDIUM }),
+        MongooseAlertModel.countDocuments({ ...query, severity: AlertSeverity.LOW }),
       ]);
 
       return {
@@ -407,27 +402,22 @@ export class AlertModel {
   static async findByAlertType(
     alertType: string,
     serviceName?: string,
-    status?: AlertStatus,
+    status?: AlertStatusType,
     limit: number = 100,
     offset: number = 0
   ): Promise<Alert[]> {
     try {
-      const whereClause: any = { alertType };
-      if (serviceName) {
-        whereClause.serviceName = serviceName;
-      }
-      if (status) {
-        whereClause.status = status;
-      }
+      const query: any = { alertType };
+      if (serviceName) query.serviceName = serviceName;
+      if (status) query.status = status;
 
-      const alerts = await prisma.alert.findMany({
-        where: whereClause,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
-      });
+      const alerts = await MongooseAlertModel.find(query)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .skip(offset)
+        .lean();
 
-      return alerts as Alert[];
+      return alerts.map((alert: any) => this.mapToAlert(alert));
     } catch (error) {
       logger.error('Error finding alerts by alert type', {
         alertType,
@@ -446,21 +436,19 @@ export class AlertModel {
     try {
       const cutoffDate = new Date(Date.now() - daysToKeep * 24 * 60 * 60 * 1000);
 
-      const result = await prisma.alert.deleteMany({
-        where: {
-          status: AlertStatus.RESOLVED,
-          resolvedAt: {
-            lt: cutoffDate,
-          },
+      const result = await MongooseAlertModel.deleteMany({
+        status: AlertStatus.RESOLVED,
+        resolvedAt: {
+          $lt: cutoffDate,
         },
       });
 
       logger.info('Cleaned up old resolved alerts', {
-        deletedCount: result.count,
+        deletedCount: result.deletedCount,
         cutoffDate,
       });
 
-      return result.count;
+      return result.deletedCount;
     } catch (error) {
       logger.error('Error cleaning up old alerts', {
         daysToKeep,
@@ -478,35 +466,33 @@ export class AlertModel {
     endTime: Date,
     serviceName?: string,
     groupBy: 'hour' | 'day' | 'week' = 'day'
-  ): Promise<Array<{ period: string; count: number; severity: AlertSeverity }>> {
+  ): Promise<Array<{ period: string; count: number; severity: AlertSeverityType }>> {
     try {
-      const whereClause: any = {
+      const query: any = {
         createdAt: {
-          gte: startTime,
-          lte: endTime,
+          $gte: startTime,
+          $lte: endTime,
         },
       };
 
       if (serviceName) {
-        whereClause.serviceName = serviceName;
+        query.serviceName = serviceName;
       }
 
-      const alerts = await prisma.alert.findMany({
-        where: whereClause,
-        select: {
-          createdAt: true,
-          severity: true,
-        },
-        orderBy: { createdAt: 'asc' },
-      });
+      const alerts = await MongooseAlertModel.find(query, {
+        createdAt: 1,
+        severity: 1,
+      })
+        .sort({ createdAt: 1 })
+        .lean();
 
       // Group by time period and severity
-      const trends: Record<string, Record<AlertSeverity, number>> = {};
-      
-      alerts.forEach(alert => {
+      const trends: Record<string, Record<AlertSeverityType, number>> = {};
+
+      alerts.forEach((alert: any) => {
         let period: string;
         const date = new Date(alert.createdAt);
-        
+
         switch (groupBy) {
           case 'hour':
             period = date.toISOString().slice(0, 13) + ':00:00.000Z';
@@ -529,20 +515,26 @@ export class AlertModel {
             [AlertSeverity.MEDIUM]: 0,
             [AlertSeverity.HIGH]: 0,
             [AlertSeverity.CRITICAL]: 0,
-          };
+          } as Record<AlertSeverityType, number>;
         }
 
-        trends[period][alert.severity]++;
+        const severity = alert.severity as AlertSeverityType;
+        if (trends[period]) {
+          const periodTrends = trends[period];
+          if (periodTrends && periodTrends[severity] !== undefined) {
+            periodTrends[severity] = (periodTrends[severity] || 0) + 1;
+          }
+        }
       });
 
       // Convert to array format
-      const result: Array<{ period: string; count: number; severity: AlertSeverity }> = [];
+      const result: Array<{ period: string; count: number; severity: AlertSeverityType }> = [];
       Object.entries(trends).forEach(([period, severities]) => {
         Object.entries(severities).forEach(([severity, count]) => {
           result.push({
             period,
-            count,
-            severity: severity as AlertSeverity,
+            count: count as number,
+            severity: severity as AlertSeverityType,
           });
         });
       });
@@ -558,5 +550,26 @@ export class AlertModel {
       });
       throw error;
     }
+  }
+
+  /**
+   * Map Mongoose document to Alert interface
+   */
+  private static mapToAlert(doc: any): Alert {
+    return {
+      id: doc._id?.toString() || doc.id,
+      serviceName: doc.serviceName,
+      alertType: doc.alertType,
+      severity: doc.severity,
+      status: doc.status,
+      title: doc.title,
+      description: doc.description,
+      value: doc.value,
+      threshold: doc.threshold,
+      labels: doc.labels,
+      resolvedAt: doc.resolvedAt,
+      acknowledgedAt: doc.acknowledgedAt,
+      acknowledgedBy: doc.acknowledgedBy,
+    };
   }
 }

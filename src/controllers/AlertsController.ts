@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { AlertService } from '@/services/AlertService';
 import { NotificationService } from '@/services/NotificationService';
-import { logger } from '@/utils/logger';
+import logger from '@/utils/logger';
 import { ApiResponse, PaginatedResponse, AlertStatus, AlertSeverity } from '@/types';
 
 export class AlertsController {

@@ -1,0 +1,20 @@
+import winston from 'winston';
+declare const logger: winston.Logger;
+export declare const addRequestId: (requestId: string) => winston.Logform.Format;
+export declare const createChildLogger: (context: Record<string, any>) => winston.Logger;
+export declare const logInfo: (message: string, meta?: Record<string, any>) => void;
+export declare const logError: (message: string, error?: Error | any, meta?: Record<string, any>) => void;
+export declare const logWarn: (message: string, meta?: Record<string, any>) => void;
+export declare const logDebug: (message: string, meta?: Record<string, any>) => void;
+export declare const logPerformance: (operation: string, duration: number, meta?: Record<string, any>) => void;
+export declare const logApiRequest: (method: string, url: string, statusCode: number, responseTime: number, meta?: Record<string, any>) => void;
+export declare const logDatabaseOperation: (operation: string, table: string, duration: number, meta?: Record<string, any>) => void;
+export declare const logServiceHealth: (serviceName: string, status: string, responseTime: number, meta?: Record<string, any>) => void;
+export declare const logAlert: (alertType: string, severity: string, serviceName: string, message: string, meta?: Record<string, any>) => void;
+export declare const logMetrics: (metricName: string, value: number, serviceName: string, meta?: Record<string, any>) => void;
+export declare const logSecurity: (event: string, severity: "low" | "medium" | "high" | "critical", details: string, meta?: Record<string, any>) => void;
+export declare const logAudit: (action: string, userId?: string, resource?: string, details?: Record<string, any>) => void;
+export declare const logErrorWithContext: (message: string, error: Error, context: Record<string, any>) => void;
+export declare const cleanupLogger: () => void;
+export default logger;
+//# sourceMappingURL=logger.d.ts.map

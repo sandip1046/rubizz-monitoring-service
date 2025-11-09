@@ -2,8 +2,8 @@ import { Request, Response } from 'express';
 import { MetricsCollectionService } from '@/services/MetricsCollectionService';
 import { SystemMetricsModel } from '@/models/SystemMetricsModel';
 import { PerformanceMetricsModel } from '@/models/PerformanceMetricsModel';
-import { logger } from '@/utils/logger';
-import { ApiResponse, PaginatedResponse, FilterParams } from '@/types';
+import logger from '@/utils/logger';
+import { ApiResponse, PaginatedResponse, FilterParams, SystemMetric } from '@/types';
 
 export class MetricsController {
   private metricsCollectionService: MetricsCollectionService;
@@ -92,17 +92,22 @@ export class MetricsController {
       } else if (serviceName) {
         metrics = await SystemMetricsModel.findByService(
           serviceName as string,
-          limitNumber,
-          offsetNumber
+          undefined,
+          undefined,
+          undefined,
+          limitNumber
         );
+        metrics = metrics.slice(offsetNumber);
         totalCount = await SystemMetricsModel.getMetricsCountByService(serviceName as string);
       } else if (metricName) {
         metrics = await SystemMetricsModel.findByMetricName(
           metricName as string,
           serviceName as string,
-          limitNumber,
-          offsetNumber
+          undefined,
+          undefined,
+          limitNumber
         );
+        metrics = metrics.slice(offsetNumber);
         totalCount = metrics.length; // Approximate count
       } else {
         res.status(400).json({
@@ -117,13 +122,13 @@ export class MetricsController {
       // Apply aggregation if requested
       let aggregatedValue;
       if (aggregation && metrics.length > 0) {
-        const values = metrics.map(m => m.value);
+        const values = metrics.map((m: SystemMetric) => m.value);
         switch (aggregation) {
           case 'avg':
-            aggregatedValue = values.reduce((sum, val) => sum + val, 0) / values.length;
+            aggregatedValue = values.reduce((sum: number, val: number) => sum + val, 0) / values.length;
             break;
           case 'sum':
-            aggregatedValue = values.reduce((sum, val) => sum + val, 0);
+            aggregatedValue = values.reduce((sum: number, val: number) => sum + val, 0);
             break;
           case 'min':
             aggregatedValue = Math.min(...values);
@@ -246,23 +251,27 @@ export class MetricsController {
           end,
           serviceName as string,
           endpoint as string,
-          method as string,
           limitNumber,
           offsetNumber
         );
       } else if (serviceName) {
         metrics = await PerformanceMetricsModel.findByService(
           serviceName as string,
-          limitNumber,
-          offsetNumber
+          undefined,
+          undefined,
+          undefined,
+          limitNumber
         );
+        metrics = metrics.slice(offsetNumber);
       } else if (endpoint) {
         metrics = await PerformanceMetricsModel.findByEndpoint(
-          endpoint as string,
           serviceName as string,
-          limitNumber,
-          offsetNumber
+          endpoint as string,
+          undefined,
+          undefined,
+          limitNumber
         );
+        metrics = metrics.slice(offsetNumber);
       } else {
         res.status(400).json({
           success: false,
@@ -606,9 +615,9 @@ export class MetricsController {
 
       const slowestEndpoints = await PerformanceMetricsModel.getSlowestEndpoints(
         serviceName,
+        limitNumber,
         start,
-        end,
-        limitNumber
+        end
       );
 
       const response: ApiResponse = {

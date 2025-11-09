@@ -1,0 +1,90 @@
+{
+  service: 'rubizz-monitoring-service',
+  version: '1.0.0',
+  environment: 'development',
+  host: 'smtp.gmail.com',
+  port: 587,
+  level: 'info',
+  message: 'Email transporter initialized',
+  timestamp: '2025-11-09 16:27:51.515'
+}
+{
+  message: 'GraphQL server initialized',
+  level: 'info',
+  service: 'rubizz-monitoring-service',
+  version: '1.0.0',
+  environment: 'development',
+  timestamp: '2025-11-09 16:27:52.133'
+}
+{
+  service: 'rubizz-monitoring-service',
+  version: '1.0.0',
+  environment: 'development',
+  database: 'mongodb',
+  url: 'mongodb+srv://***:***@rubizz-monitoring.f6wp9oe.mongodb.net/rubizz-monitoring',
+  level: 'info',
+  message: 'MongoDB connected successfully',
+  timestamp: '2025-11-09 16:27:52.631'
+}
+{
+  message: 'Database connected successfully',
+  level: 'info',
+  service: 'rubizz-monitoring-service',
+  version: '1.0.0',
+  environment: 'development',
+  timestamp: '2025-11-09 16:27:52.632'
+}
+{
+  service: 'rubizz-monitoring-service',
+  version: '1.0.0',
+  environment: 'development',
+  error: 'Redis service health check failed',
+  level: 'error',
+  message: 'Failed to connect to Redis service',
+  timestamp: '2025-11-09 16:28:15.121'
+}
+{
+  service: 'rubizz-monitoring-service',
+  version: '1.0.0',
+  environment: 'development',
+  host: 'smtp.gmail.com',
+  port: 587,
+  level: 'info',
+  message: 'Email transporter initialized',
+  timestamp: '2025-11-09 16:28:26.266'
+}
+{
+  message: 'GraphQL server initialized',
+  level: 'info',
+  service: 'rubizz-monitoring-service',
+  version: '1.0.0',
+  environment: 'development',
+  timestamp: '2025-11-09 16:28:26.359'
+}
+{
+  service: 'rubizz-monitoring-service',
+  version: '1.0.0',
+  environment: 'development',
+  database: 'mongodb',
+  url: 'mongodb+srv://***:***@rubizz-monitoring.f6wp9oe.mongodb.net/rubizz-monitoring',
+  level: 'info',
+  message: 'MongoDB connected successfully',
+  timestamp: '2025-11-09 16:28:26.790'
+}
+{
+  message: 'Database connected successfully',
+  level: 'info',
+  service: 'rubizz-monitoring-service',
+  version: '1.0.0',
+  environment: 'development',
+  timestamp: '2025-11-09 16:28:26.790'
+}
+{
+  service: 'rubizz-monitoring-service',
+  version: '1.0.0',
+  environment: 'development',
+  error: 'Redis service health check failed',
+  level: 'error',
+  message: 'Failed to connect to Redis service',
+  timestamp: '2025-11-09 16:28:27.205'
+}

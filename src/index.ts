@@ -8,12 +8,16 @@ import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 
 import { config } from '@/config/config';
-import { logger } from '@/utils/logger';
+import logger from '@/utils/logger';
 import { connectDatabase, isDatabaseConnected } from '@/database/connection';
-import { connectRedis, isRedisConnected } from '@/database/RedisConnection';
+import { RedisService } from '@/services/RedisService';
 import { HealthCheckService } from '@/services/HealthCheckService';
 import { MetricsCollectionService } from '@/services/MetricsCollectionService';
 import { AlertService } from '@/services/AlertService';
+import { KafkaService } from '@/services/KafkaService';
+import { GrpcServer } from '@/servers/grpc.server';
+import { GraphQLServer } from '@/servers/graphql.server';
+import { WebSocketServer } from '@/servers/websocket.server';
 
 // Import controllers
 import { HealthController } from '@/controllers/HealthController';
@@ -42,6 +46,11 @@ class MonitoringService {
   private healthCheckService: HealthCheckService;
   private metricsCollectionService: MetricsCollectionService;
   private alertService: AlertService;
+  private redisService: RedisService;
+  private kafkaService: KafkaService;
+  private grpcServer: GrpcServer;
+  private graphqlServer: GraphQLServer;
+  private websocketServer: WebSocketServer;
 
   constructor() {
     this.app = express();
@@ -51,6 +60,11 @@ class MonitoringService {
     this.healthCheckService = HealthCheckService.getInstance();
     this.metricsCollectionService = MetricsCollectionService.getInstance();
     this.alertService = AlertService.getInstance();
+    this.redisService = new RedisService();
+    this.kafkaService = new KafkaService();
+    this.grpcServer = new GrpcServer();
+    this.graphqlServer = new GraphQLServer();
+    this.websocketServer = new WebSocketServer();
 
     this.initializeMiddleware();
     this.initializeRoutes();
@@ -206,7 +220,7 @@ class MonitoringService {
             connected: isDatabaseConnected(),
           },
           redis: {
-            connected: isRedisConnected(),
+            connected: this.redisService.isRedisConnected(),
           },
           services: {
             healthCheck: this.healthCheckService.getServiceStatus(),
@@ -283,8 +297,18 @@ class MonitoringService {
       logger.info('Database connected successfully');
 
       // Connect to Redis
-      await connectRedis();
+      await this.redisService.connect();
       logger.info('Redis connected successfully');
+
+      // Connect to Kafka
+      try {
+        await this.kafkaService.connect();
+        logger.info('Kafka connected successfully');
+      } catch (error) {
+        logger.warn('Kafka connection failed, continuing without Kafka', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
 
       // Start monitoring services
       await this.healthCheckService.start();
@@ -294,13 +318,49 @@ class MonitoringService {
       logger.info('All monitoring services started successfully');
 
       // Start HTTP server
-      this.app.listen(config.server.port, () => {
+      const httpServer = this.app.listen(config.server.port, async () => {
         logger.info(`🚀 ${config.server.serviceName} v${config.server.serviceVersion} started successfully`, {
           port: config.server.port,
           environment: config.server.nodeEnv,
           healthEndpoint: `http://localhost:${config.server.port}/health`,
           apiDocs: `http://localhost:${config.server.port}/api-docs`,
         });
+
+        // Start GraphQL server (after HTTP server is ready)
+        try {
+          await this.graphqlServer.start(this.app);
+          logger.info('GraphQL server started', {
+            path: config.graphql.path,
+          });
+        } catch (error) {
+          logger.warn('GraphQL server failed to start', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+
+        // Start gRPC server
+        try {
+          await this.grpcServer.start();
+          logger.info('gRPC server started', {
+            port: config.grpc.port,
+          });
+        } catch (error) {
+          logger.warn('gRPC server failed to start', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+
+        // Start WebSocket server
+        try {
+          await this.websocketServer.start();
+          logger.info('WebSocket server started', {
+            port: config.websocket.port,
+          });
+        } catch (error) {
+          logger.warn('WebSocket server failed to start', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
       });
 
       // Graceful shutdown handling
@@ -322,10 +382,21 @@ class MonitoringService {
       logger.info(`Received ${signal}. Starting graceful shutdown...`);
 
       try {
+        // Stop protocol servers
+        await this.grpcServer.stop();
+        await this.graphqlServer.stop();
+        await this.websocketServer.stop();
+        await this.kafkaService.disconnect();
+
         // Stop monitoring services
         await this.healthCheckService.stop();
         await this.metricsCollectionService.stop();
         await this.alertService.stop();
+
+        // Disconnect from services
+        await this.redisService.disconnect();
+        const { db } = await import('@/database/connection');
+        await db.disconnect();
 
         logger.info('All monitoring services stopped successfully');
         logger.info('Graceful shutdown completed');

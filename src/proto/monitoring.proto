@@ -1,0 +1,185 @@
+syntax = "proto3";
+
+package monitoring;
+
+// Monitoring Service gRPC API
+service MonitoringService {
+  // Health Check
+  rpc GetHealth(HealthRequest) returns (HealthResponse);
+  rpc GetServiceHealth(ServiceHealthRequest) returns (ServiceHealthResponse);
+  
+  // Metrics
+  rpc GetSystemMetrics(MetricsRequest) returns (MetricsResponse);
+  rpc GetPerformanceMetrics(PerformanceMetricsRequest) returns (PerformanceMetricsResponse);
+  rpc RecordMetric(RecordMetricRequest) returns (RecordMetricResponse);
+  
+  // Alerts
+  rpc GetAlerts(AlertsRequest) returns (AlertsResponse);
+  rpc CreateAlert(CreateAlertRequest) returns (CreateAlertResponse);
+  rpc AcknowledgeAlert(AcknowledgeAlertRequest) returns (AcknowledgeAlertResponse);
+  rpc ResolveAlert(ResolveAlertRequest) returns (ResolveAlertResponse);
+  
+  // Real-time streaming
+  rpc StreamMetrics(StreamMetricsRequest) returns (stream MetricUpdate);
+  rpc StreamAlerts(StreamAlertsRequest) returns (stream AlertUpdate);
+}
+
+// Request/Response Messages
+message HealthRequest {}
+
+message HealthResponse {
+  bool healthy = 1;
+  string status = 2;
+  int64 timestamp = 3;
+}
+
+message ServiceHealthRequest {
+  string service_name = 1;
+}
+
+message ServiceHealthResponse {
+  string service_name = 1;
+  string status = 2;
+  int32 response_time = 3;
+  int64 last_checked = 4;
+  string error_message = 5;
+}
+
+message MetricsRequest {
+  string service_name = 1;
+  int64 start_time = 2;
+  int64 end_time = 3;
+  string metric_name = 4;
+}
+
+message MetricsResponse {
+  repeated SystemMetric metrics = 1;
+  int32 total = 2;
+}
+
+message PerformanceMetricsRequest {
+  string service_name = 1;
+  string endpoint = 2;
+  int64 start_time = 3;
+  int64 end_time = 4;
+}
+
+message PerformanceMetricsResponse {
+  repeated PerformanceMetric metrics = 1;
+  int32 total = 2;
+}
+
+message RecordMetricRequest {
+  string service_name = 1;
+  string metric_name = 2;
+  string metric_type = 3;
+  double value = 4;
+  map<string, string> labels = 5;
+}
+
+message RecordMetricResponse {
+  bool success = 1;
+  string metric_id = 2;
+}
+
+message AlertsRequest {
+  string service_name = 1;
+  string status = 2;
+  string severity = 3;
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+message AlertsResponse {
+  repeated Alert alerts = 1;
+  int32 total = 2;
+}
+
+message CreateAlertRequest {
+  string service_name = 1;
+  string alert_type = 2;
+  string severity = 3;
+  string title = 4;
+  string description = 5;
+  double value = 6;
+  double threshold = 7;
+  map<string, string> labels = 8;
+}
+
+message CreateAlertResponse {
+  bool success = 1;
+  string alert_id = 2;
+}
+
+message AcknowledgeAlertRequest {
+  string alert_id = 1;
+  string acknowledged_by = 2;
+}
+
+message AcknowledgeAlertResponse {
+  bool success = 1;
+}
+
+message ResolveAlertRequest {
+  string alert_id = 1;
+}
+
+message ResolveAlertResponse {
+  bool success = 1;
+}
+
+message StreamMetricsRequest {
+  string service_name = 1;
+  repeated string metric_names = 2;
+}
+
+message StreamAlertsRequest {
+  string service_name = 1;
+  string severity = 2;
+}
+
+// Data Models
+message SystemMetric {
+  string id = 1;
+  string service_name = 2;
+  string metric_name = 3;
+  string metric_type = 4;
+  double value = 5;
+  map<string, string> labels = 6;
+  int64 timestamp = 7;
+}
+
+message PerformanceMetric {
+  string id = 1;
+  string service_name = 2;
+  string endpoint = 3;
+  string method = 4;
+  int32 response_time = 5;
+  int32 status_code = 6;
+  int64 timestamp = 7;
+}
+
+message Alert {
+  string id = 1;
+  string service_name = 2;
+  string alert_type = 3;
+  string severity = 4;
+  string status = 5;
+  string title = 6;
+  string description = 7;
+  double value = 8;
+  double threshold = 9;
+  int64 created_at = 10;
+}
+
+message MetricUpdate {
+  SystemMetric metric = 1;
+  int64 timestamp = 2;
+}
+
+message AlertUpdate {
+  Alert alert = 1;
+  string event_type = 2; // created, updated, resolved
+  int64 timestamp = 3;
+}
+

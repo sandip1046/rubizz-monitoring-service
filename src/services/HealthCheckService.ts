@@ -2,7 +2,7 @@ import axios, { AxiosResponse } from 'axios';
 import { ServiceHealthModel } from '@/models/ServiceHealthModel';
 import { ServiceHealth, ServiceStatus, HealthCheckResponse } from '@/types';
 import { config, DEFAULT_SERVICES } from '@/config/config';
-import { logger } from '@/utils/logger';
+import logger from '@/utils/logger';
 
 export class HealthCheckService {
   private static instance: HealthCheckService;
@@ -99,11 +99,20 @@ export class HealthCheckService {
     let metadata: Record<string, any> = {};
 
     try {
+      // Prepare headers
+      const headers: Record<string, string> = {
+        'User-Agent': `${config.server.serviceName}/${config.server.serviceVersion}`,
+      };
+
+      // Add API Gateway token if this is an API Gateway health check and token is configured
+      if (service.name === 'rubizz-api-gateway' && config.apiGateway.token) {
+        headers['Authorization'] = `Bearer ${config.apiGateway.token}`;
+        headers['X-Service-Token'] = config.apiGateway.token;
+      }
+
       const response: AxiosResponse<HealthCheckResponse> = await axios.get(service.url, {
         timeout: 10000, // 10 second timeout
-        headers: {
-          'User-Agent': `${config.server.serviceName}/${config.server.serviceVersion}`,
-        },
+        headers,
       });
 
       responseTime = Date.now() - startTime;
@@ -149,7 +158,7 @@ export class HealthCheckService {
       serviceUrl: service.url,
       status,
       responseTime,
-      errorMessage,
+      errorMessage: errorMessage || undefined,
       metadata,
     });
 
@@ -171,11 +180,20 @@ export class HealthCheckService {
     let metadata: Record<string, any> = {};
 
     try {
+      // Prepare headers
+      const headers: Record<string, string> = {
+        'User-Agent': `${config.server.serviceName}/${config.server.serviceVersion}`,
+      };
+
+      // Add API Gateway token if this is an API Gateway health check and token is configured
+      if (serviceUrl.includes(config.apiGateway.url) && config.apiGateway.token) {
+        headers['Authorization'] = `Bearer ${config.apiGateway.token}`;
+        headers['X-Service-Token'] = config.apiGateway.token;
+      }
+
       const response: AxiosResponse<HealthCheckResponse> = await axios.get(serviceUrl, {
         timeout,
-        headers: {
-          'User-Agent': `${config.server.serviceName}/${config.server.serviceVersion}`,
-        },
+        headers,
       });
 
       responseTime = Date.now() - startTime;
@@ -221,7 +239,7 @@ export class HealthCheckService {
       serviceUrl,
       status,
       responseTime,
-      errorMessage,
+      errorMessage: errorMessage || undefined,
       metadata,
     });
 

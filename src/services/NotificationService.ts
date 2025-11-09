@@ -1,8 +1,8 @@
 import nodemailer from 'nodemailer';
 import axios from 'axios';
-import { Alert, AlertSeverity } from '@/types';
+import { Alert, AlertSeverity, AlertStatus } from '@/types';
 import { config } from '@/config/config';
-import { logger } from '@/utils/logger';
+import logger from '@/utils/logger';
 
 export class NotificationService {
   private static instance: NotificationService;
@@ -25,7 +25,7 @@ export class NotificationService {
   private initializeEmailTransporter(): void {
     if (config.alerts.email.enabled && config.alerts.email.smtp.host) {
       try {
-        this.emailTransporter = nodemailer.createTransporter({
+        this.emailTransporter = nodemailer.createTransport({
           host: config.alerts.email.smtp.host,
           port: config.alerts.email.smtp.port,
           secure: false,

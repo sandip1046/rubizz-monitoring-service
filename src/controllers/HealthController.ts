@@ -4,22 +4,24 @@ import { MetricsCollectionService } from '@/services/MetricsCollectionService';
 import { AlertService } from '@/services/AlertService';
 import { NotificationService } from '@/services/NotificationService';
 import { connectDatabase, isDatabaseConnected, databaseHealthCheck } from '@/database/connection';
-import { connectRedis, isRedisConnected, redisHealthCheck } from '@/database/RedisConnection';
+import { RedisService } from '@/services/RedisService';
 import { config } from '@/config/config';
-import { logger } from '@/utils/logger';
-import { HealthCheckResponse, ApiResponse } from '@/types';
+import logger from '@/utils/logger';
+import { HealthCheckResponse, ApiResponse, ServiceStatus } from '@/types';
 
 export class HealthController {
   private healthCheckService: HealthCheckService;
   private metricsCollectionService: MetricsCollectionService;
   private alertService: AlertService;
   private notificationService: NotificationService;
+  private redisService: RedisService;
 
   constructor() {
     this.healthCheckService = HealthCheckService.getInstance();
     this.metricsCollectionService = MetricsCollectionService.getInstance();
     this.alertService = AlertService.getInstance();
     this.notificationService = NotificationService.getInstance();
+    this.redisService = new RedisService();
   }
 
   /**
@@ -35,7 +37,8 @@ export class HealthController {
       const databaseResponseTime = Date.now() - startTime;
 
       // Check Redis connection
-      const redisConnected = await redisHealthCheck();
+      const redisHealthCheck = await this.redisService.healthCheck();
+      const redisConnected = redisHealthCheck.session && redisHealthCheck.cache && redisHealthCheck.queue;
       const redisResponseTime = Date.now() - startTime;
 
       // Get service statuses
@@ -49,7 +52,7 @@ export class HealthController {
                        healthCheckStatus.isRunning && metricsStatus.isRunning;
 
       const response: HealthCheckResponse = {
-        status: isHealthy ? 'healthy' : 'unhealthy',
+        status: isHealthy ? ServiceStatus.HEALTHY : ServiceStatus.UNHEALTHY,
         serviceName: config.server.serviceName,
         timestamp: new Date(),
         responseTime: Date.now() - startTime,
@@ -74,11 +77,13 @@ export class HealthController {
             responseTime: redisResponseTime,
           },
         },
-        checks: {
-          database: databaseConnected,
-          redis: redisConnected,
-          externalServices: true, // Would check external services
-        },
+      };
+      
+      // Add checks as additional property (not in type definition)
+      (response as any).checks = {
+        database: databaseConnected,
+        redis: redisConnected,
+        externalServices: true, // Would check external services
       };
 
       // Add service statuses to response
@@ -106,7 +111,7 @@ export class HealthController {
       });
 
       const errorResponse: HealthCheckResponse = {
-        status: 'unhealthy',
+        status: ServiceStatus.UNHEALTHY,
         serviceName: config.server.serviceName,
         timestamp: new Date(),
         responseTime: 0,

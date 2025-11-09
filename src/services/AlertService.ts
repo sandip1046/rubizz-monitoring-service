@@ -2,9 +2,9 @@ import { AlertModel } from '@/models/AlertModel';
 import { SystemMetricsModel } from '@/models/SystemMetricsModel';
 import { PerformanceMetricsModel } from '@/models/PerformanceMetricsModel';
 import { ServiceHealthModel } from '@/models/ServiceHealthModel';
-import { Alert, AlertSeverity, AlertStatus, ServiceStatus } from '@/types';
+import { Alert, AlertSeverity, AlertStatus, ServiceStatus, SystemMetric } from '@/types';
 import { config } from '@/config/config';
-import { logger } from '@/utils/logger';
+import logger from '@/utils/logger';
 import { NotificationService } from './NotificationService';
 
 export class AlertService {
@@ -122,7 +122,7 @@ export class AlertService {
             threshold: config.monitoring.alertThresholds.responseTime,
             labels: {
               serviceUrl: service.serviceUrl,
-              lastChecked: service.lastChecked.toISOString(),
+              lastChecked: service.lastChecked?.toISOString() || new Date().toISOString(),
               errorMessage: service.errorMessage,
             },
           });
@@ -149,7 +149,7 @@ export class AlertService {
             threshold: config.monitoring.alertThresholds.responseTime,
             labels: {
               serviceUrl: service.serviceUrl,
-              lastChecked: service.lastChecked.toISOString(),
+              lastChecked: service.lastChecked?.toISOString() || new Date().toISOString(),
             },
           });
         }
@@ -208,7 +208,7 @@ export class AlertService {
       );
 
       if (responseTimeMetrics.length > 0) {
-        const avgResponseTime = responseTimeMetrics.reduce((sum, m) => sum + m.value, 0) / responseTimeMetrics.length;
+        const avgResponseTime = responseTimeMetrics.reduce((sum: number, m: SystemMetric) => sum + m.value, 0) / responseTimeMetrics.length;
         if (avgResponseTime > config.monitoring.alertThresholds.responseTime) {
           await this.checkMetricAlert(
             serviceName,
@@ -327,7 +327,7 @@ export class AlertService {
   ): Promise<Alert | null> {
     try {
       const alerts = await AlertModel.findByAlertType(alertType, serviceName, status, 1);
-      return alerts.length > 0 ? alerts[0] : null;
+      return alerts.length > 0 ? (alerts[0] || null) : null;
     } catch (error) {
       logger.error('Error finding existing alert', {
         serviceName,

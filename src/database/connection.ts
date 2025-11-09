@@ -1,41 +1,14 @@
-import { PrismaClient } from '@prisma/client';
+import mongoose from 'mongoose';
 import { config } from '@/config/config';
-import { logger } from '@/utils/logger';
+import logger from '@/utils/logger';
 
 class DatabaseConnection {
   private static instance: DatabaseConnection;
-  private prisma: PrismaClient;
   private isConnected: boolean = false;
 
   private constructor() {
-    this.prisma = new PrismaClient({
-      datasources: {
-        db: {
-          url: config.database.url,
-        },
-      },
-      log: [
-        {
-          emit: 'event',
-          level: 'query',
-        },
-        {
-          emit: 'event',
-          level: 'error',
-        },
-        {
-          emit: 'event',
-          level: 'info',
-        },
-        {
-          emit: 'event',
-          level: 'warn',
-        },
-      ],
-    });
-
-    // Set up event listeners
-    this.setupEventListeners();
+    // Set up mongoose connection options
+    mongoose.set('strictQuery', false);
   }
 
   public static getInstance(): DatabaseConnection {
@@ -45,21 +18,34 @@ class DatabaseConnection {
     return DatabaseConnection.instance;
   }
 
-  public getPrismaClient(): PrismaClient {
-    return this.prisma;
-  }
-
   public async connect(): Promise<void> {
     try {
-      await this.prisma.$connect();
+      if (this.isConnected) {
+        logger.info('Database already connected');
+        return;
+      }
+
+      const connectionOptions: mongoose.ConnectOptions = {
+        maxPoolSize: 10,
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+        bufferCommands: false,
+      };
+
+      await mongoose.connect(config.database.url, connectionOptions);
       this.isConnected = true;
-      logger.info('Database connected successfully', {
+
+      logger.info('MongoDB connected successfully', {
         service: config.server.serviceName,
-        database: 'postgresql',
+        database: 'mongodb',
+        url: config.database.url.replace(/\/\/.*@/, '//***:***@'), // Hide credentials
       });
+
+      // Set up event listeners
+      this.setupEventListeners();
     } catch (error) {
       this.isConnected = false;
-      logger.error('Failed to connect to database', {
+      logger.error('Failed to connect to MongoDB', {
         service: config.server.serviceName,
         error: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
@@ -70,13 +56,17 @@ class DatabaseConnection {
 
   public async disconnect(): Promise<void> {
     try {
-      await this.prisma.$disconnect();
+      if (!this.isConnected) {
+        return;
+      }
+
+      await mongoose.disconnect();
       this.isConnected = false;
-      logger.info('Database disconnected successfully', {
+      logger.info('MongoDB disconnected successfully', {
         service: config.server.serviceName,
       });
     } catch (error) {
-      logger.error('Error disconnecting from database', {
+      logger.error('Error disconnecting from MongoDB', {
         service: config.server.serviceName,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
@@ -86,10 +76,14 @@ class DatabaseConnection {
 
   public async healthCheck(): Promise<boolean> {
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
+      if (!this.isConnected || !mongoose.connection.db) {
+        return false;
+      }
+
+      await mongoose.connection.db.admin().ping();
       return true;
     } catch (error) {
-      logger.error('Database health check failed', {
+      logger.error('MongoDB health check failed', {
         service: config.server.serviceName,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
@@ -98,60 +92,47 @@ class DatabaseConnection {
   }
 
   public isDatabaseConnected(): boolean {
-    return this.isConnected;
+    return this.isConnected && mongoose.connection.readyState === 1;
   }
 
   private setupEventListeners(): void {
-    // Query event listener
-    this.prisma.$on('query', (e) => {
-      if (config.server.nodeEnv === 'development') {
-        logger.debug('Database query executed', {
-          service: config.server.serviceName,
-          query: e.query,
-          params: e.params,
-          duration: e.duration,
-        });
-      }
-    });
-
-    // Error event listener
-    this.prisma.$on('error', (e) => {
-      logger.error('Database error occurred', {
+    mongoose.connection.on('connected', () => {
+      logger.info('Mongoose connected to MongoDB', {
         service: config.server.serviceName,
-        error: e.message,
-        target: e.target,
       });
     });
 
-    // Info event listener
-    this.prisma.$on('info', (e) => {
-      logger.info('Database info', {
+    mongoose.connection.on('error', (error: Error) => {
+      logger.error('Mongoose connection error', {
         service: config.server.serviceName,
-        message: e.message,
-        target: e.target,
+        error: error.message,
       });
     });
 
-    // Warn event listener
-    this.prisma.$on('warn', (e) => {
-      logger.warn('Database warning', {
+    mongoose.connection.on('disconnected', () => {
+      logger.warn('Mongoose disconnected from MongoDB', {
         service: config.server.serviceName,
-        message: e.message,
-        target: e.target,
       });
+      this.isConnected = false;
+    });
+
+    mongoose.connection.on('reconnected', () => {
+      logger.info('Mongoose reconnected to MongoDB', {
+        service: config.server.serviceName,
+      });
+      this.isConnected = true;
+    });
+
+    // Handle process termination
+    process.on('SIGINT', async () => {
+      await this.disconnect();
+      process.exit(0);
     });
   }
 
-  // Transaction helper methods
-  public async transaction<T>(
-    fn: (prisma: PrismaClient) => Promise<T>
-  ): Promise<T> {
-    return await this.prisma.$transaction(fn);
-  }
-
-  // Raw query helper
-  public async rawQuery<T = any>(query: string, params: any[] = []): Promise<T> {
-    return await this.prisma.$queryRawUnsafe(query, ...params);
+  // Get mongoose connection
+  public getConnection(): typeof mongoose {
+    return mongoose;
   }
 
   // Cleanup method for graceful shutdown
@@ -172,12 +153,12 @@ class DatabaseConnection {
 
 // Export singleton instance
 export const db = DatabaseConnection.getInstance();
-export const prisma = db.getPrismaClient();
 
 // Export connection helper functions
 export const connectDatabase = () => db.connect();
 export const disconnectDatabase = () => db.disconnect();
 export const isDatabaseConnected = () => db.isDatabaseConnected();
 export const databaseHealthCheck = () => db.healthCheck();
+export const getMongooseConnection = () => db.getConnection();
 
 export default db;

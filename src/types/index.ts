@@ -43,6 +43,9 @@ export interface ServiceHealthCheck {
   metadata?: Record<string, any>;
 }
 
+// Service Health Interface (alias for compatibility)
+export interface ServiceHealth extends ServiceHealthCheck {}
+
 // System Metric Interface
 export interface SystemMetric {
   id?: string;

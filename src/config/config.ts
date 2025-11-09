@@ -15,11 +15,11 @@ const envSchema = z.object({
   // Database Configuration
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 
-  // Redis Configuration
-  REDIS_HOST: z.string().default('localhost'),
-  REDIS_PORT: z.string().transform(Number).default('6379'),
-  REDIS_PASSWORD: z.string().optional(),
-  REDIS_DB: z.string().transform(Number).default('0'),
+  // Redis Service Configuration
+  REDIS_SERVICE_URL: z.string().default('https://rubizz-redis-service.onrender.com/api/v1/redis'),
+  REDIS_SERVICE_TIMEOUT: z.string().transform((val: string) => Number(val)).default('30000'),
+  REDIS_SERVICE_RETRIES: z.string().transform((val: string) => Number(val)).default('3'),
+  REDIS_SERVICE_RETRY_DELAY: z.string().transform((val: string) => Number(val)).default('1000'),
 
   // JWT Configuration
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
@@ -84,6 +84,27 @@ const envSchema = z.object({
   SERVICE_REGISTRY_URL: z.string().url().optional(),
   SERVICE_CHECK_INTERVAL: z.string().default('30s'),
   SERVICE_CHECK_TIMEOUT: z.string().default('10s'),
+
+  // gRPC Configuration
+  GRPC_PORT: z.string().transform(Number).default('50051'),
+  GRPC_HOST: z.string().default('0.0.0.0'),
+
+  // GraphQL Configuration
+  GRAPHQL_PORT: z.string().transform(Number).default('4000'),
+  GRAPHQL_PATH: z.string().default('/graphql'),
+  GRAPHQL_SUBSCRIPTION_PATH: z.string().default('/graphql-subscriptions'),
+
+  // WebSocket Configuration
+  WEBSOCKET_PORT: z.string().transform(Number).default('8080'),
+  WEBSOCKET_PATH: z.string().default('/ws'),
+
+  // Kafka Configuration
+  KAFKA_BROKERS: z.string().default('localhost:9092'),
+  KAFKA_CLIENT_ID: z.string().default('rubizz-monitoring-service'),
+  KAFKA_GROUP_ID: z.string().default('monitoring-service-group'),
+  KAFKA_TOPICS_MONITORING: z.string().default('monitoring.events'),
+  KAFKA_TOPICS_ALERTS: z.string().default('monitoring.alerts'),
+  KAFKA_TOPICS_METRICS: z.string().default('monitoring.metrics'),
 });
 
 // Validate environment variables
@@ -104,12 +125,12 @@ export const config = {
     url: env.DATABASE_URL,
   },
 
-  // Redis Configuration
-  redis: {
-    host: env.REDIS_HOST,
-    port: env.REDIS_PORT,
-    password: env.REDIS_PASSWORD,
-    db: env.REDIS_DB,
+  // Redis Service Configuration
+  redisService: {
+    url: env.REDIS_SERVICE_URL,
+    timeout: env.REDIS_SERVICE_TIMEOUT,
+    retries: env.REDIS_SERVICE_RETRIES,
+    retryDelay: env.REDIS_SERVICE_RETRY_DELAY,
   },
 
   // JWT Configuration
@@ -201,13 +222,44 @@ export const config = {
     checkInterval: env.SERVICE_CHECK_INTERVAL,
     checkTimeout: env.SERVICE_CHECK_TIMEOUT,
   },
+
+  // gRPC Configuration
+  grpc: {
+    port: env.GRPC_PORT,
+    host: env.GRPC_HOST,
+  },
+
+  // GraphQL Configuration
+  graphql: {
+    port: env.GRAPHQL_PORT,
+    path: env.GRAPHQL_PATH,
+    subscriptionPath: env.GRAPHQL_SUBSCRIPTION_PATH,
+  },
+
+  // WebSocket Configuration
+  websocket: {
+    port: env.WEBSOCKET_PORT,
+    path: env.WEBSOCKET_PATH,
+  },
+
+  // Kafka Configuration
+  kafka: {
+    brokers: env.KAFKA_BROKERS.split(','),
+    clientId: env.KAFKA_CLIENT_ID,
+    groupId: env.KAFKA_GROUP_ID,
+    topics: {
+      monitoring: env.KAFKA_TOPICS_MONITORING,
+      alerts: env.KAFKA_TOPICS_ALERTS,
+      metrics: env.KAFKA_TOPICS_METRICS,
+    },
+  },
 };
 
 // Export individual configurations for convenience
 export const {
   server,
   database,
-  redis,
+  redisService,
   jwt,
   apiGateway,
   monitoring,
@@ -218,6 +270,10 @@ export const {
   swagger,
   alerts,
   serviceDiscovery,
+  grpc,
+  graphql,
+  websocket,
+  kafka,
 } = config;
 
 // Default service endpoints for monitoring
