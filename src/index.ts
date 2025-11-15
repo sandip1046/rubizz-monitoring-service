@@ -23,6 +23,7 @@ import { WebSocketServer } from '@/servers/websocket.server';
 import { HealthController } from '@/controllers/HealthController';
 import { MetricsController } from '@/controllers/MetricsController';
 import { AlertsController } from '@/controllers/AlertsController';
+import { KafkaMonitoringController } from '@/controllers/KafkaMonitoringController';
 
 // Import middleware
 import { requestMonitoringMiddleware } from '@/middleware/requestMonitoring';
@@ -184,6 +185,9 @@ class MonitoringService {
     this.app.get('/alerts/notification-status', asyncHandler(this.alertsController.getNotificationStatus.bind(this.alertsController)));
     this.app.post('/alerts/start', asyncHandler(this.alertsController.startAlertService.bind(this.alertsController)));
     this.app.post('/alerts/stop', asyncHandler(this.alertsController.stopAlertService.bind(this.alertsController)));
+
+    // Kafka monitoring routes
+    this.app.use('/api/v1/kafka', KafkaMonitoringController);
 
     // Root route
     this.app.get('/', (req, res) => {

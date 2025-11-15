@@ -27,7 +27,7 @@
   "dependencies": {
     "@grpc/grpc-js": "^1.9.14",
     "@grpc/proto-loader": "^0.7.10",
-    "@sandip1046/rubizz-shared-libs": "^1.0.0",
+    "@sandip1046/rubizz-shared-libs": "^1.5.0",
     "apollo-server-express": "^3.12.1",
     "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
